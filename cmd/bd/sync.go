@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/steveyegge/beads/internal/configfile"
+	"github.com/steveyegge/beads/internal/debug"
 	"github.com/steveyegge/beads/internal/deletions"
 	"github.com/steveyegge/beads/internal/rpc"
 	"github.com/steveyegge/beads/internal/syncbranch"
@@ -57,6 +58,18 @@ Use --merge to merge the sync branch back to main branch.`,
 
 		// Resolve noGitHistory based on fromMain (fixes #417)
 		noGitHistory = resolveNoGitHistoryForFromMain(fromMain, noGitHistory)
+
+	// bd-sync-corruption fix: Force direct mode for sync operations.
+	// This prevents stale daemon SQLite connections from corrupting exports.
+	// If the daemon was running but its database file was deleted and recreated
+	// (e.g., during recovery), the daemon's SQLite connection points to the old
+	// (deleted) file, causing export to return incomplete/corrupt data.
+	// Using direct mode ensures we always read from the current database file.
+	if daemonClient != nil {
+		debug.Logf("sync: forcing direct mode for consistency")
+		_ = daemonClient.Close()
+		daemonClient = nil
+	}
 
 		// Find JSONL path
 		jsonlPath := findJSONLPath()
